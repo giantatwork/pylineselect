@@ -19,75 +19,54 @@ const findClassOrFunction = (line: vscode.TextLine) => {
   return classOrFunctionRegex.test(line.text);
 };
 
-export function findBlockStart(
-  document: vscode.TextDocument,
-  startLineNumber: number,
-  currentIndentation: number
-): number {
-  for (let i = startLineNumber - 1; i >= 0; i--) {
-    const line = document.lineAt(i);
-    if (
-      line.firstNonWhitespaceCharacterIndex !== currentIndentation ||
-      line.isEmptyOrWhitespace
-    ) {
-      break;
-    }
-    startLineNumber = i;
-  }
-  return startLineNumber;
-}
-
-export function findBlockEnd(
+export function findClassFunctionBlock(
   document: vscode.TextDocument,
   startLineNumber: number,
   currentIndentation: number,
-  startBlock: boolean,
-  branchBlock: boolean,
-  decoratorBlock: boolean
-): number {
-  let endLineNumber = startLineNumber;
+  isClassOrFunction: boolean,
+  isDecorator: boolean
+): { start: number; end: number } {
+  // check if current line is decorator
+  // if yes, look up and down for more decorators
+  // till class or function block
+  // then stop at next startblock
+
+  // if current line is function or class -> look above for decorator -> get new start line
+  let startRange = startLineNumber;
+  while (startRange > 0) {
+    startRange--;
+    const line = document.lineAt(startRange);
+    if (!findDecorator(line)) {
+      break;
+    }
+  }
+
+  // if current lines is decorator -> look above and below for decorator -> get new start line
+
+  // search up for one or more decorators
+
+  let end = startLineNumber;
+  let startBlockCount = 0;
 
   for (let i = startLineNumber + 1; i < document.lineCount; i++) {
     const line = document.lineAt(i);
-    if (line.firstNonWhitespaceCharacterIndex < currentIndentation) {
-      break;
-    }
-
-    const lineStartBlock = findStartBlock(line);
-    const lineDecorator = findDecorator(line);
-
-    if (!startBlock && !branchBlock && !decoratorBlock) {
-      if (lineStartBlock || lineDecorator || line.isEmptyOrWhitespace) {
-        break;
-      }
-    }
     if (line.isEmptyOrWhitespace) {
       continue;
     }
-
-    const lineBranchBlock = findBranchBlock(line);
-
-    if (
-      startBlock &&
-      (!lineBranchBlock || lineDecorator) &&
-      currentIndentation === line.firstNonWhitespaceCharacterIndex
-    ) {
+    if (line.firstNonWhitespaceCharacterIndex < currentIndentation) {
       break;
     }
-    if (
-      branchBlock &&
-      currentIndentation === line.firstNonWhitespaceCharacterIndex &&
-      (lineStartBlock ||
-        lineBranchBlock ||
-        (!lineStartBlock && lineBranchBlock))
-    ) {
+    let isStartBlock = findStartBlock(line);
+    if (isStartBlock) {
       break;
     }
-
-    endLineNumber = i;
+    end = i;
   }
 
-  return endLineNumber;
+  // search down
+  // accept everything except new start block
+
+  return { start: startRange + 1, end: end };
 }
 
 export function selectBlock() {
@@ -108,46 +87,62 @@ export function selectBlock() {
     return;
   }
 
-  let startOffset = 0;
-  let decorator: boolean = false;
-
-  if (findClassOrFunction(startLine)) {
-    const previousLineNumber = startLineNumber - 1;
-    if (previousLineNumber > 0) {
-      const previousLine = document.lineAt(previousLineNumber);
-      if (findDecorator(previousLine)) {
-        startOffset = 1;
-      }
-    }
-  } else if (findDecorator(startLine)) {
-    startLineNumber += 1;
-    startLine = document.lineAt(startLineNumber);
-    startOffset = 1;
-    decorator = true;
-  }
-
-  const startBlock = findStartBlock(startLine);
-  const branchBlock = findBranchBlock(startLine);
   const currentIndentation = startLine.firstNonWhitespaceCharacterIndex;
 
-  if (!startBlock && !branchBlock) {
-    startLineNumber = findBlockStart(
-      document,
-      startLineNumber,
-      currentIndentation
-    );
-  }
+  let isClassOrFunction = findClassOrFunction(startLine);
+  let isDecorator = findDecorator(startLine);
 
-  const endLineNumber = findBlockEnd(
+  let range = findClassFunctionBlock(
     document,
     startLineNumber,
     currentIndentation,
-    startBlock,
-    branchBlock,
-    decorator
+    isClassOrFunction,
+    isDecorator
   );
 
-  startLineNumber -= startOffset;
+  startLineNumber = range.start;
+  let endLineNumber = range.end;
+
+  // let startOffset = 0;
+  // let decorator: boolean = false;
+
+  // if (findClassOrFunction(startLine)) {
+  //   const previousLineNumber = startLineNumber - 1;
+  //   if (previousLineNumber > 0) {
+  //     const previousLine = document.lineAt(previousLineNumber);
+  //     if (findDecorator(previousLine)) {
+  //       startOffset = 1;
+  //     }
+  //   }
+  // } else if (findDecorator(startLine)) {
+  //   startLineNumber += 1;
+  //   startLine = document.lineAt(startLineNumber);
+  //   startOffset = 1;
+  //   decorator = true;
+  // }
+
+  // const startBlock = findStartBlock(startLine);
+  // const branchBlock = findBranchBlock(startLine);
+  // const currentIndentation = startLine.firstNonWhitespaceCharacterIndex;
+
+  // if (!startBlock && !branchBlock) {
+  //   startLineNumber = findBlockStart(
+  //     document,
+  //     startLineNumber,
+  //     currentIndentation
+  //   );
+  // }
+
+  // const endLineNumber = findBlockEnd(
+  //   document,
+  //   startLineNumber,
+  //   currentIndentation,
+  //   startBlock,
+  //   branchBlock,
+  //   decorator
+  // );
+
+  // startLineNumber -= startOffset;
 
   if (!selection.isEmpty) {
     if (selection.start.line < startLineNumber) {
