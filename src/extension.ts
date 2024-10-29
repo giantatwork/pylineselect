@@ -3,12 +3,16 @@ import * as vscode from "vscode";
 const startBlockRegex =
   /^\s*(def|class|if|for|while|try|with|async)\s*(.*)\s*:\s*$/;
 const classOrFunctionRegex = /^\s*(def|class)\s+\w+.*/;
+const decoratorRegex = /^\s*@\w+.*/;
 
 const findStartBlock = (line: vscode.TextLine) => {
   return startBlockRegex.test(line.text);
 };
 const findClassOrFunction = (line: vscode.TextLine) => {
   return classOrFunctionRegex.test(line.text);
+};
+const findDecorator = (line: vscode.TextLine) => {
+  return decoratorRegex.test(line.text);
 };
 
 export function lineChecks(
@@ -44,6 +48,9 @@ export function findRange(
         continue;
       }
       if (!lineChecks(line, currentIndentation)) {
+        break;
+      }
+      if (findDecorator(line)) {
         break;
       }
       end = i;
