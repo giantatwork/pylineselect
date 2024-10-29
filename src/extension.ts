@@ -2,71 +2,76 @@ import * as vscode from "vscode";
 
 const startBlockRegex =
   /^\s*(def|class|if|for|while|try|with|async)\s*(.*)\s*:\s*$/;
-const branchBlockRegex = /^\s*(else|elif|except|finally)\s*(.*)\s*:\s*$/;
-const decoratorRegex = /^\s*@\w+(\.\w+)*(\(.*\))?\s*$/;
-const classOrFunctionRegex = /^\s*(def|class)\s+\w+\s*(\(.*\))?\s*:\s*$/;
+const classOrFunctionRegex = /^\s*(def|class)\s+\w+.*/;
 
 const findStartBlock = (line: vscode.TextLine) => {
   return startBlockRegex.test(line.text);
-};
-const findBranchBlock = (line: vscode.TextLine) => {
-  return branchBlockRegex.test(line.text);
-};
-const findDecorator = (line: vscode.TextLine) => {
-  return decoratorRegex.test(line.text);
 };
 const findClassOrFunction = (line: vscode.TextLine) => {
   return classOrFunctionRegex.test(line.text);
 };
 
-export function findClassFunctionBlock(
+export function lineChecks(
+  line: vscode.TextLine,
+  currentIndentation: number
+): boolean {
+  if (line.firstNonWhitespaceCharacterIndex < currentIndentation) {
+    return false;
+  }
+  if (
+    line.firstNonWhitespaceCharacterIndex === currentIndentation &&
+    (findClassOrFunction(line) || findStartBlock(line))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function findRange(
   document: vscode.TextDocument,
-  startLineNumber: number,
-  currentIndentation: number,
-  isClassOrFunction: boolean,
-  isDecorator: boolean
-): { start: number; end: number } {
-  // check if current line is decorator
-  // if yes, look up and down for more decorators
-  // till class or function block
-  // then stop at next startblock
+  startLine: vscode.TextLine
+): { startRange: number; endRange: number } {
+  const isClassOrFunction = findClassOrFunction(startLine);
+  const isStartBlock = findStartBlock(startLine);
+  const currentIndentation = startLine.firstNonWhitespaceCharacterIndex;
+  let end = startLine.lineNumber;
+  let start = startLine.lineNumber;
 
-  // if current line is function or class -> look above for decorator -> get new start line
-  let startRange = startLineNumber;
-  while (startRange > 0) {
-    startRange--;
-    const line = document.lineAt(startRange);
-    if (!findDecorator(line)) {
-      break;
+  if (isClassOrFunction || isStartBlock) {
+    for (let i = startLine.lineNumber + 1; i < document.lineCount; i++) {
+      const line = document.lineAt(i);
+      if (line.isEmptyOrWhitespace) {
+        continue;
+      }
+      if (!lineChecks(line, currentIndentation)) {
+        break;
+      }
+      end = i;
+    }
+  } else {
+    for (let i = startLine.lineNumber + 1; i < document.lineCount; i++) {
+      const line = document.lineAt(i);
+      if (line.isEmptyOrWhitespace) {
+        break;
+      }
+      if (!lineChecks(line, currentIndentation)) {
+        break;
+      }
+      end = i;
+    }
+    for (let i = startLine.lineNumber - 1; i >= 0; i--) {
+      const line = document.lineAt(i);
+      if (line.isEmptyOrWhitespace) {
+        break;
+      }
+      if (!lineChecks(line, currentIndentation)) {
+        break;
+      }
+      start = i;
     }
   }
 
-  // if current lines is decorator -> look above and below for decorator -> get new start line
-
-  // search up for one or more decorators
-
-  let end = startLineNumber;
-  let startBlockCount = 0;
-
-  for (let i = startLineNumber + 1; i < document.lineCount; i++) {
-    const line = document.lineAt(i);
-    if (line.isEmptyOrWhitespace) {
-      continue;
-    }
-    if (line.firstNonWhitespaceCharacterIndex < currentIndentation) {
-      break;
-    }
-    let isStartBlock = findStartBlock(line);
-    if (isStartBlock) {
-      break;
-    }
-    end = i;
-  }
-
-  // search down
-  // accept everything except new start block
-
-  return { start: startRange + 1, end: end };
+  return { startRange: start, endRange: end };
 }
 
 export function selectBlock() {
@@ -87,75 +92,20 @@ export function selectBlock() {
     return;
   }
 
-  const currentIndentation = startLine.firstNonWhitespaceCharacterIndex;
+  const selectionRange = findRange(document, startLine);
 
-  let isClassOrFunction = findClassOrFunction(startLine);
-  let isDecorator = findDecorator(startLine);
-
-  let range = findClassFunctionBlock(
-    document,
-    startLineNumber,
-    currentIndentation,
-    isClassOrFunction,
-    isDecorator
-  );
-
-  startLineNumber = range.start;
-  let endLineNumber = range.end;
-
-  // let startOffset = 0;
-  // let decorator: boolean = false;
-
-  // if (findClassOrFunction(startLine)) {
-  //   const previousLineNumber = startLineNumber - 1;
-  //   if (previousLineNumber > 0) {
-  //     const previousLine = document.lineAt(previousLineNumber);
-  //     if (findDecorator(previousLine)) {
-  //       startOffset = 1;
-  //     }
-  //   }
-  // } else if (findDecorator(startLine)) {
-  //   startLineNumber += 1;
-  //   startLine = document.lineAt(startLineNumber);
-  //   startOffset = 1;
-  //   decorator = true;
-  // }
-
-  // const startBlock = findStartBlock(startLine);
-  // const branchBlock = findBranchBlock(startLine);
-  // const currentIndentation = startLine.firstNonWhitespaceCharacterIndex;
-
-  // if (!startBlock && !branchBlock) {
-  //   startLineNumber = findBlockStart(
-  //     document,
-  //     startLineNumber,
-  //     currentIndentation
-  //   );
-  // }
-
-  // const endLineNumber = findBlockEnd(
-  //   document,
-  //   startLineNumber,
-  //   currentIndentation,
-  //   startBlock,
-  //   branchBlock,
-  //   decorator
-  // );
-
-  // startLineNumber -= startOffset;
+  let rangeStart = selectionRange.startRange;
+  const rangeEnd = selectionRange.endRange;
 
   if (!selection.isEmpty) {
-    if (selection.start.line < startLineNumber) {
-      startLineNumber = selection.start.line;
+    if (selection.start.line < rangeStart) {
+      rangeStart = selection.start.line;
     }
   }
 
   const newSelection = new vscode.Selection(
-    new vscode.Position(startLineNumber, 0),
-    new vscode.Position(
-      endLineNumber,
-      document.lineAt(endLineNumber).text.length
-    )
+    new vscode.Position(rangeStart, 0),
+    new vscode.Position(rangeEnd, document.lineAt(rangeEnd).text.length)
   );
 
   editor.selection = newSelection;
