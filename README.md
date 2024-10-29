@@ -7,15 +7,9 @@ PyLineSelect is a Visual Studio Code extension that helps Python developers quic
 ### Selection for Block-Starting Keywords
 When the cursor is placed on a line that contains a block-starting Python keyword such as `def`, `class`, `if`, `for`, `while`, `try`, or `with`, Pyselect will automatically select all lines beneath it, continuing until the next line that starts a new block.
 
-### Selection for Flow Control Keywords
-If the cursor is on a line with flow control keywords like `else`, `elif`, or `except`, Pyselect will select all lines below the current one until it encounters another Python keyword.
-
 ### Selection Based on Indentation
 
 When the cursor is on a line without any specific Python keywords, Pyselect will select all lines above and below that share the same indentation level as the current line.
-
-### Decorator selection
-- Support for Decorators: If a function or class has decorators, the selection will automatically include the decorator.
 
 ## How to Install
 

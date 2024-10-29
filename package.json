@@ -4,6 +4,7 @@
   "description": "Quickly select Python code blocks",
   "repository": {"url": "git@github.com:giantatwork/pylineselect.git"},
   "version": "0.0.1",
+  "publisher": "schnauss",
   "engines": {
     "vscode": "^1.94.0"
   },
